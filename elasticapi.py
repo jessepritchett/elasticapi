@@ -1,4 +1,4 @@
-import sys, getopt, warnings, json, flask, elasticsearch
+import sys, getopt, json, flask, elasticsearch
 from urllib.parse import urlparse
 from auth import requires_auth
 
@@ -9,7 +9,7 @@ app = flask.Flask(__name__)
 try:
     opts, rest = getopt.getopt(sys.argv[1:], 't:n', ['target='])
 except getopt.GetoptError:
-    print('usage: [-t <target url>, -n]')
+    print('usage: [-t <target url>] [-n]')
     sys.exit(1)
 
 # default to non-SSL Elasticsearch server on localhost
@@ -25,8 +25,7 @@ for opt, val in opts:
         if parts.scheme != '': scheme = parts.scheme
         if parts.path != '': path = parts.path
     elif opt in ('-n', '--no-cert'):
-        # allow for SSL, but no cert
-        warnings.warn('this is a very important warning about security')
+        # allow for SSL, but no cert (will generate warning)
         cert = False
 
 # build base URL for target Elasticsearch server
@@ -47,7 +46,10 @@ def pretty(data):
 
 def error(err):
     """ very basic error handling """
-    flask.abort(err.status_code, str(err.info))
+    if err.status_code != 'N/A':
+        flask.abort(err.status_code, str(err))
+    else:
+        flask.abort(500, str(err))
 
 
 # Flask paths #
@@ -70,9 +72,9 @@ def cluster(indices, level):
     see: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-health.html
 
     Reduced to three GET use-cases:
-    GET /cluster gives cluster-level health
-    GET /cluster/{index1,index2,...} gives filtered indices-level health
-    GET /cluster/{index1,index2,...}/shards gives filtered shard-level health
+        GET /cluster gives cluster-level health
+        GET /cluster/{index1,index2,...} gives filtered indices-level health
+        GET /cluster/{index1,index2,...}/shards gives filtered shard-level health
 
     Wait mechanics, and local flag are not exposed.
 
@@ -81,8 +83,8 @@ def cluster(indices, level):
          https://www.elastic.co/guide/en/elasticsearch/reference/current/indices-delete-index.html
 
     Added ability to create/delete multiple indices at once
-    POST /cluster/{index1,index2,...} creates one or more indices
-    DELETE /cluster/{index1,index2,...} deletes one or more indices
+        POST /cluster/{index1,index2,...} creates one or more indices
+        DELETE /cluster/{index1,index2,...} deletes one or more indices
     """
 
     res = {}
@@ -104,6 +106,7 @@ def cluster(indices, level):
             # for now, simply dump the json (destroys the order originally provided by Elasticsearch)
             res = es.cluster.health(index=indices, level=level)
 
+        # define POST
         elif flask.request.method == 'POST':
             # fortunately, we only arrive here for /cluster/<indices>
             for index in indices.split(','):
@@ -111,6 +114,7 @@ def cluster(indices, level):
                     # FIXME account for mixed ack/nacks
                     res = es.indices.create(index)
 
+        # define DELETE
         elif flask.request.method == 'DELETE':
             # fortunately, we only arrive here for /cluster/<indices>
             for index in indices.split(','):
@@ -118,7 +122,7 @@ def cluster(indices, level):
                     # FIXME account for mixed ack/nacks
                     res = es.indices.delete(index)
 
-    except elasticsearch.exceptions.ElasticsearchException as err:
+    except elasticsearch.exceptions.TransportError as err:
         error(err)
 
     return pretty(res)
@@ -132,7 +136,7 @@ def nodes():
     see: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-nodes-info.html
 
     Reduced to one use-case:
-    /nodes gives full info for all nodes
+        GET /nodes gives full info for all nodes
     """
     return pretty(es.nodes.info())
 
@@ -145,7 +149,7 @@ def allocate(index, shard, node):
     see: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-reroute.html
 
     Reduced to one use-case:
-    /allocate/{index}/{shard}/{node} allocates the given unassigned shard to the given node
+        POST /allocate/{index}/{shard}/{node} allocates the given unassigned shard to the given node
     """
     cmd = {
         'commands': [{
@@ -168,7 +172,7 @@ def move(index, shard, from_node, to_node):
     see: https://www.elastic.co/guide/en/elasticsearch/reference/current/cluster-reroute.html
 
     Reduced to one use-case:
-    /allocate/{index}/{shard}/{from_node}/{to_node} moves the given shard from one node to another
+        POST /allocate/{index}/{shard}/{from_node}/{to_node} moves the given shard from one node to another
     """
     cmd = {
         'commands': [{
