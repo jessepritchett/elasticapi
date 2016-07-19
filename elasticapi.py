@@ -7,33 +7,31 @@ app = flask.Flask(__name__)
 
 # define options and usage
 try:
-    opts, rest = getopt.getopt(sys.argv[1:], 't:n', ['target='])
+    opts, rest = getopt.getopt(sys.argv[1:], 'l:t:n', ['local=', 'target='])
 except getopt.GetoptError:
-    print('usage: [-t <target url>] [-n]')
+    print('usage: [-l <local url>] [-t <target url>] [-n]')
     sys.exit(1)
 
 # default to non-SSL Elasticsearch server on localhost
-scheme = 'http'
-path = 'localhost:9200'
+local_url = 'http://localhost:5001'
+target_url = 'http://localhost:9200'
 cert = True
 
 # parse options
 for opt, val in opts:
-    if opt in ('-t', '--target'):
-        # inspect URL for scheme/path
-        parts = urlparse(val)
-        if parts.scheme != '': scheme = parts.scheme
-        if parts.path != '': path = parts.path
+    if opt in ('-l', '--local'):
+        # assign local URL
+        local_url = val
+    elif opt in ('-t', '--target'):
+        # assign target URL
+        target_url = val
     elif opt in ('-n', '--no-cert'):
         # allow for SSL, but no cert (will generate warning)
         cert = False
 
-# build base URL for target Elasticsearch server
-base_url = '://'.join((scheme, path))
-
 # one Elasticsearch connection?
 es = elasticsearch.Elasticsearch(
-    [base_url],
+    [target_url],
     connection_class=elasticsearch.RequestsHttpConnection,
     verify_certs=cert
 )
@@ -190,4 +188,5 @@ def move(index, shard, from_node, to_node):
 
 if __name__ == '__main__':
     # not production ready, but fine for running as a demo/test
-    app.run()
+    url = urlparse(local_url)
+    app.run(host=url.hostname, port=int(url.port))
