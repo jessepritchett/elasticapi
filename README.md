@@ -7,6 +7,7 @@ Toy REST API for Elasticsearch
 ```
 usage: [-l <local url>] [-t <target url>] [-n]
 ```
+* -n tells requests NOT to validate SSL Certs (in case Elasticsearch uses SSL with a self-signed cert)
 
 ## Quickstart
 
