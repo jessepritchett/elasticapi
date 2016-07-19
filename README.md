@@ -10,7 +10,8 @@ usage: [-l <local url>] [-t <target url>] [-n]
 
 ## Quickstart
 
-* Install Python/Pip
+* Install [Python] (https://www.python.org/downloads)
+* Install [Pip] (https://pip.pypa.io/en/stable/installing)
 * In clone directory:
 
 ```
